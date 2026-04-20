@@ -94,3 +94,74 @@ calc_fisheries_overlap <- function(joined_data,
 
   cbind(keys, out)
 }
+
+#' Calculate a fisheries risk index
+#'
+#' Creates a fisheries risk score based on overlap intensity and gear-specific weighting.
+#'
+#' @param overlap_data A data frame of overlap metrics.
+#' @param overlap_col Character string. Name of the overlap metric column.
+#' @param gear_col Character string. Name of the gear column.
+#' @param gear_weights Either a named numeric vector or a data frame with gear weights.
+#' @param scale_01 Logical. If TRUE, rescales the risk index to [0, 1].
+#'
+#' @return A data frame with a risk index column.
+#' @export
+calc_risk_index <- function(overlap_data,
+                            overlap_col = "total_overlap",
+                            gear_col = "gear",
+                            gear_weights,
+                            scale_01 = TRUE) {
+  if (!is.data.frame(overlap_data)) {
+    stop("overlap_data must be a data frame.")
+  }
+
+  if (!overlap_col %in% names(overlap_data)) {
+    stop("overlap_col not found in overlap_data.")
+  }
+
+  if (!gear_col %in% names(overlap_data)) {
+    stop("gear_col not found in overlap_data.")
+  }
+
+  if (missing(gear_weights)) {
+    stop("gear_weights must be provided.")
+  }
+
+  weights_df <- NULL
+
+  if (is.numeric(gear_weights) && !is.null(names(gear_weights))) {
+    weights_df <- data.frame(
+      gear_tmp = names(gear_weights),
+      gear_weight = as.numeric(gear_weights),
+      stringsAsFactors = FALSE
+    )
+    names(weights_df)[1] <- gear_col
+  } else if (is.data.frame(gear_weights)) {
+    if (!(gear_col %in% names(gear_weights))) {
+      stop("gear_weights data frame must contain the gear column.")
+    }
+    if (!("gear_weight" %in% names(gear_weights))) {
+      stop("gear_weights data frame must contain a gear_weight column.")
+    }
+    weights_df <- gear_weights
+  } else {
+    stop("gear_weights must be a named numeric vector or data frame.")
+  }
+
+  out <- merge(overlap_data, weights_df, by = gear_col, all.x = TRUE)
+  out$gear_weight[is.na(out$gear_weight)] <- 1
+
+  out$risk_index <- suppressWarnings(as.numeric(out[[overlap_col]])) * out$gear_weight
+
+  if (scale_01) {
+    rng <- range(out$risk_index, na.rm = TRUE)
+    if (is.finite(rng[1]) && is.finite(rng[2]) && rng[1] != rng[2]) {
+      out$risk_index_scaled <- (out$risk_index - rng[1]) / (rng[2] - rng[1])
+    } else {
+      out$risk_index_scaled <- 0
+    }
+  }
+
+  out
+}
