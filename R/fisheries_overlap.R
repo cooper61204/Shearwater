@@ -165,3 +165,56 @@ calc_risk_index <- function(overlap_data,
 
   out
 }
+
+#' Calculate diel overlap between bird activity and fisheries effort
+#'
+#' Measures overlap by time of day to assess diel coincidence between birds
+#' and fisheries.
+#'
+#' @param joined_data A data frame or sf object containing already joined
+#'   bird-fisheries data.
+#' @param track_id_col Character string. Name of the bird or track ID column.
+#' @param track_diel_col Character string. Name of the bird diel label column.
+#' @param fisheries_diel_col Character string. Name of the fisheries diel label column.
+#' @param effort_col Character string. Name of the fisheries effort column.
+#'
+#' @return A data frame summarizing diel overlap.
+#' @export
+calc_diel_overlap <- function(joined_data,
+                              track_id_col = "track_id",
+                              track_diel_col = "diel_period.x",
+                              fisheries_diel_col = "diel_period.y",
+                              effort_col = "effort_std") {
+  if (!is.data.frame(joined_data)) {
+    stop("joined_data must be a data frame or sf object.")
+  }
+
+  dat <- if (inherits(joined_data, "sf")) sf::st_drop_geometry(joined_data) else joined_data
+
+  needed <- c(track_id_col, track_diel_col, fisheries_diel_col, effort_col)
+  missing_cols <- needed[!needed %in% names(dat)]
+
+  if (length(missing_cols) > 0) {
+    stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  dat <- dat[dat[[track_diel_col]] == dat[[fisheries_diel_col]], , drop = FALSE]
+
+  split_dat <- split(dat, list(dat[[track_id_col]], dat[[track_diel_col]]), drop = TRUE)
+
+  out <- lapply(split_dat, function(df) {
+    vals <- suppressWarnings(as.numeric(df[[effort_col]]))
+    data.frame(
+      n_overlap_records = sum(!is.na(vals)),
+      diel_overlap = sum(vals, na.rm = TRUE),
+      mean_diel_overlap = mean(vals, na.rm = TRUE)
+    )
+  })
+
+  out <- do.call(rbind, out)
+  keys <- unique(dat[c(track_id_col, track_diel_col)])
+  rownames(out) <- NULL
+  names(keys)[2] <- "diel_period"
+
+  cbind(keys, out)
+}
