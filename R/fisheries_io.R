@@ -100,3 +100,65 @@ standardize_fishing_effort <- function(fisheries_data,
 
   fisheries_data
 }
+
+#' Convert fisheries table to sf
+#'
+#' Converts a fisheries data frame with longitude and latitude columns
+#' into an sf object.
+#'
+#' @param data A data frame.
+#' @param lon_col Character string. Longitude column name.
+#' @param lat_col Character string. Latitude column name.
+#' @param crs Numeric EPSG code. Default is 4326.
+#'
+#' @return An sf object.
+#' @export
+as_fisheries_sf <- function(data,
+                            lon_col = "longitude",
+                            lat_col = "latitude",
+                            crs = 4326) {
+  if (!is.data.frame(data)) {
+    stop("data must be a data frame.")
+  }
+
+  if (!lon_col %in% names(data)) {
+    stop("lon_col not found in data.")
+  }
+
+  if (!lat_col %in% names(data)) {
+    stop("lat_col not found in data.")
+  }
+
+  sf::st_as_sf(data, coords = c(lon_col, lat_col), crs = crs, remove = FALSE)
+}
+
+#' Convert fisheries table to sf
+#'
+#' Converts a fisheries data frame with longitude and latitude columns
+#' into an sf object.
+#'
+#' @param data A data frame.
+#' @param lon_col Character string. Longitude column name.
+#' @param lat_col Character string. Latitude column name.
+#' @param crs Numeric EPSG code. Default is 4326.
+#'
+#' @return An sf object.
+#' @export
+as_fisheries_sf <- function(data,
+                            lon_col = "longitude",
+                            lat_col = "latitude",
+                            crs = 4326) {
+  if (!is.data.frame(data)) {
+    stop("data must be a data frame.")
+  }
+
+  if (!lon_col %in% names(data)) {
+    stop("lon_col not found in data.")
+  }
+
+  if (!lat_col %in% names(data)) {
+    stop("lat_col not found in data.")
+  }
+
+  sf::st_as_sf(data, coords = c(lon_col, lat_col), crs = crs, remove = FALSE)
+}
