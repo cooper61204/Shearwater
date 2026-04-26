@@ -1,3 +1,7 @@
+library(dplyr)
+library(sf)
+library(readr)
+
 # ------------------------------------------------------------------------------
 # summarize_policy_exposure()
 # Create a policy-facing summary of each bird's exposure to jurisdictions,
@@ -121,4 +125,89 @@ summarize_policy_exposure <- function(jurisdiction_summary,
     dplyr::arrange(.data$bird_id)
 
   policy_summary
+}
+
+# ------------------------------------------------------------------------------
+# export_policy_summary_tables()
+# Write final summary tables to CSV files for reporting and decision support.
+#
+# Inputs:
+#   summary_data  — named list of tibbles to export, e.g.:
+#                     list(
+#                       policy    = summarize_policy_exposure(...),
+#                       jurisdictions = calc_time_in_jurisdictions(...),
+#                       transboundary = calc_transboundary_movements(...)
+#                     )
+#                   OR a single tibble (exported as one file)
+#   file_path     — character; either:
+#                     - a directory path (if summary_data is a named list,
+#                       one CSV per list element is written there)
+#                     - a full .csv file path (if summary_data is a single tibble)
+#   overwrite     — logical; if FALSE (default), errors if file already exists
+#
+# Output:
+#   Invisibly returns a character vector of the file path(s) written.
+#   Primarily called for its side effect of writing files to disk.
+# ------------------------------------------------------------------------------
+export_policy_summary_tables <- function(summary_data,
+                                         file_path,
+                                         overwrite = FALSE) {
+
+  # Single tibble: write directly to file_path
+  if (inherits(summary_data, "data.frame")) {
+
+    if (!overwrite && file.exists(file_path)) {
+      stop("File already exists: ", file_path,
+           ". Set overwrite = TRUE to replace it.")
+    }
+
+    if (!grepl("\\.csv$", file_path, ignore.case = TRUE)) {
+      stop("file_path must end in .csv when exporting a single table.")
+    }
+
+    # Create directory if it doesn't exist
+    dir.create(dirname(file_path), showWarnings = FALSE, recursive = TRUE)
+
+    readr::write_csv(summary_data, file_path)
+    message("Written: ", file_path)
+    return(invisible(file_path))
+  }
+
+  # Named list of tibbles: write one CSV per element into file_path dir
+  if (is.list(summary_data)) {
+
+    if (is.null(names(summary_data)) || any(names(summary_data) == "")) {
+      stop("summary_data must be a fully named list when exporting multiple tables.")
+    }
+
+    # Create output directory if it doesn't exist
+    dir.create(file_path, showWarnings = FALSE, recursive = TRUE)
+
+    written <- character(length(summary_data))
+
+    for (i in seq_along(summary_data)) {
+
+      tbl  <- summary_data[[i]]
+      name <- names(summary_data)[i]
+      out  <- file.path(file_path, paste0(name, ".csv"))
+
+      if (!overwrite && file.exists(out)) {
+        stop("File already exists: ", out,
+             ". Set overwrite = TRUE to replace it.")
+      }
+
+      if (!inherits(tbl, "data.frame")) {
+        warning("Skipping '", name, "' — not a data frame.")
+        next
+      }
+
+      readr::write_csv(tbl, out)
+      message("Written: ", out)
+      written[i] <- out
+    }
+
+    return(invisible(written))
+  }
+
+  stop("summary_data must be a data frame or a named list of data frames.")
 }
