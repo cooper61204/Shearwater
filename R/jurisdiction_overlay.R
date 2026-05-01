@@ -244,6 +244,7 @@ print.management_layers <- function(x, ...) {
   }
 
   invisible(x)
+}
 library(sf)
 library(dplyr)
 library(lubridate)
@@ -521,3 +522,4 @@ overlay_priority_areas <- function(track_data, priority_layer) {
 
   stop("track_data must contain POINT or POLYGON geometries.")
 }
+

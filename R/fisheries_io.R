@@ -16,13 +16,22 @@ read_gfw_data <- function(file_path) {
     stop("File does not exist: ", file_path)
   }
 
-
   ext <- tolower(tools::file_ext(file_path))
 
   if (ext == "csv") {
-    data <- read.csv(file_path, stringsAsFactors = FALSE)
+    data <- read.csv(
+      file_path,
+      stringsAsFactors = FALSE,
+      colClasses = "character",
+      check.names = FALSE
+    )
   } else if (ext %in% c("tsv", "txt")) {
-    data <- read.delim(file_path, stringsAsFactors = FALSE)
+    data <- read.delim(
+      file_path,
+      stringsAsFactors = FALSE,
+      colClasses = "character",
+      check.names = FALSE
+    )
   } else if (ext == "rds") {
     data <- readRDS(file_path)
   } else {
@@ -33,10 +42,8 @@ read_gfw_data <- function(file_path) {
     stop("Imported object is not a data frame.")
   }
 
-  return(data)
+  data
 }
-
-
 #' Standardize fisheries effort data
 #'
 #' Cleans and standardizes fisheries effort fields and gear categories.
@@ -92,7 +99,7 @@ standardize_fishing_effort <- function(fisheries_data,
     m <- mean(fisheries_data[[effort_col]], na.rm = TRUE)
 
     if (is.na(s) || s == 0) {
-      fisheries_data$effort_std <- 0
+      fisheries_data$effort_std <- rep(0, nrow(fisheries_data))
     } else {
       fisheries_data$effort_std <- (fisheries_data[[effort_col]] - m) / s
     }
