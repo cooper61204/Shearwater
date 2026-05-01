@@ -1,3 +1,66 @@
+#' Plot a fisheries overlap or risk heatmap
+#'
+#' Maps the spatial pattern of fisheries overlap or risk intensity using an sf
+#' grid or polygon layer.
+#'
+#' @param grid_data An sf object containing grid or polygon geometry and a value
+#'   column to plot.
+#' @param fill_col Character string. Name of the overlap or risk column to use
+#'   for fill color.
+#' @param border_color Character string. Polygon border color.
+#' @param na_color Character string. Fill color for missing values.
+#' @param title Optional character string for the plot title.
+#' @param legend_title Optional character string for the legend title.
+#'
+#' @return A ggplot object.
+#' @export
+plot_fisheries_heatmap <- function(grid_data,
+                                   fill_col = "total_overlap",
+                                   border_color = "grey40",
+                                   na_color = "white",
+                                   title = NULL,
+                                   legend_title = NULL) {
+  if (!inherits(grid_data, "sf")) {
+    stop("grid_data must be an sf object.")
+  }
+
+  if (!fill_col %in% names(grid_data)) {
+    stop("fill_col not found in grid_data.")
+  }
+
+  fill_vals <- suppressWarnings(as.numeric(as.character(grid_data[[fill_col]])))
+
+  if (length(fill_vals) > 0 &&
+      all(is.na(fill_vals)) &&
+      any(!is.na(grid_data[[fill_col]]))) {
+    stop("fill_col must contain numeric or numeric-like values.")
+  }
+
+  grid_data[[fill_col]] <- fill_vals
+
+  if (is.null(legend_title)) {
+    legend_title <- fill_col
+  }
+
+  fill_sym <- rlang::sym(fill_col)
+
+  p <- ggplot2::ggplot(grid_data) +
+    ggplot2::geom_sf(
+      ggplot2::aes(fill = !!fill_sym),
+      color = border_color
+    ) +
+    ggplot2::scale_fill_gradient(
+      name = legend_title,
+      low = "lightyellow",
+      high = "red",
+      na.value = na_color
+    ) +
+    ggplot2::coord_sf(expand = FALSE) +
+    ggplot2::theme_minimal() +
+    ggplot2::labs(title = title)
+
+  p
+}
 #' Plot raw or cleaned bird tracks on a map
 #'
 #' Creates a map of GPS tracks for one or more individuals. Useful for quick

@@ -66,35 +66,54 @@ calc_fisheries_overlap <- function(joined_data,
     stop("gear_col not found in joined_data.")
   }
 
-  dat <- if (inherits(joined_data, "sf")) sf::st_drop_geometry(joined_data) else joined_data
+  dat <- if (inherits(joined_data, "sf")) {
+    sf::st_drop_geometry(joined_data)
+  } else {
+    joined_data
+  }
 
   group_cols <- c(track_id_col, gear_col)
+
   if (!is.null(cell_id_col)) {
     if (!cell_id_col %in% names(dat)) {
       stop("cell_id_col not found in joined_data.")
     }
+
     group_cols <- c(group_cols, cell_id_col)
+  }
+
+  if (nrow(dat) == 0) {
+    return(data.frame(
+      dat[group_cols],
+      n_overlap_records = integer(),
+      total_overlap = numeric(),
+      mean_overlap = numeric(),
+      max_overlap = numeric()
+    ))
   }
 
   split_dat <- split(dat, dat[group_cols], drop = TRUE)
 
   out <- lapply(split_dat, function(df) {
     vals <- suppressWarnings(as.numeric(df[[effort_col]]))
-    data.frame(
-      n_overlap_records = sum(!is.na(vals)),
-      total_overlap = sum(vals, na.rm = TRUE),
-      mean_overlap = mean(vals, na.rm = TRUE),
-      max_overlap = max(vals, na.rm = TRUE)
+    valid_vals <- vals[!is.na(vals)]
+
+    keys <- df[1, group_cols, drop = FALSE]
+
+    metrics <- data.frame(
+      n_overlap_records = length(valid_vals),
+      total_overlap = sum(valid_vals),
+      mean_overlap = if (length(valid_vals) == 0) NA_real_ else mean(valid_vals),
+      max_overlap = if (length(valid_vals) == 0) NA_real_ else max(valid_vals)
     )
+
+    cbind(keys, metrics)
   })
 
-  out <- do.call(rbind, out)
-  keys <- unique(dat[group_cols])
-  rownames(out) <- NULL
-
-  cbind(keys, out)
+  result <- do.call(rbind, out)
+  rownames(result) <- NULL
+  result
 }
-
 #' Calculate a fisheries risk index
 #'
 #' Creates a fisheries risk score based on overlap intensity and gear-specific weighting.
@@ -155,31 +174,22 @@ calc_risk_index <- function(overlap_data,
   out$risk_index <- suppressWarnings(as.numeric(out[[overlap_col]])) * out$gear_weight
 
   if (scale_01) {
-    rng <- range(out$risk_index, na.rm = TRUE)
-    if (is.finite(rng[1]) && is.finite(rng[2]) && rng[1] != rng[2]) {
-      out$risk_index_scaled <- (out$risk_index - rng[1]) / (rng[2] - rng[1])
+    if (nrow(out) == 0) {
+      out$risk_index_scaled <- numeric(0)
     } else {
-      out$risk_index_scaled <- 0
+      rng <- range(out$risk_index, na.rm = TRUE)
+
+      if (is.finite(rng[1]) && is.finite(rng[2]) && rng[1] != rng[2]) {
+        out$risk_index_scaled <- (out$risk_index - rng[1]) / (rng[2] - rng[1])
+      } else {
+        out$risk_index_scaled <- rep(0, nrow(out))
+      }
     }
   }
 
   out
 }
 
-#' Calculate diel overlap between bird activity and fisheries effort
-#'
-#' Measures overlap by time of day to assess diel coincidence between birds
-#' and fisheries.
-#'
-#' @param joined_data A data frame or sf object containing already joined
-#'   bird-fisheries data.
-#' @param track_id_col Character string. Name of the bird or track ID column.
-#' @param track_diel_col Character string. Name of the bird diel label column.
-#' @param fisheries_diel_col Character string. Name of the fisheries diel label column.
-#' @param effort_col Character string. Name of the fisheries effort column.
-#'
-#' @return A data frame summarizing diel overlap.
-#' @export
 calc_diel_overlap <- function(joined_data,
                               track_id_col = "track_id",
                               track_diel_col = "diel_period.x",
@@ -189,7 +199,11 @@ calc_diel_overlap <- function(joined_data,
     stop("joined_data must be a data frame or sf object.")
   }
 
-  dat <- if (inherits(joined_data, "sf")) sf::st_drop_geometry(joined_data) else joined_data
+  dat <- if (inherits(joined_data, "sf")) {
+    sf::st_drop_geometry(joined_data)
+  } else {
+    joined_data
+  }
 
   needed <- c(track_id_col, track_diel_col, fisheries_diel_col, effort_col)
   missing_cols <- needed[!needed %in% names(dat)]
@@ -200,21 +214,103 @@ calc_diel_overlap <- function(joined_data,
 
   dat <- dat[dat[[track_diel_col]] == dat[[fisheries_diel_col]], , drop = FALSE]
 
-  split_dat <- split(dat, list(dat[[track_id_col]], dat[[track_diel_col]]), drop = TRUE)
+  if (nrow(dat) == 0) {
+    result <- dat[c(track_id_col, track_diel_col)]
+    names(result)[2] <- "diel_period"
+
+    result$n_overlap_records <- integer(0)
+    result$diel_overlap <- numeric(0)
+    result$mean_diel_overlap <- numeric(0)
+
+    return(result)
+  }
+
+  split_dat <- split(
+    dat,
+    list(dat[[track_id_col]], dat[[track_diel_col]]),
+    drop = TRUE
+  )
 
   out <- lapply(split_dat, function(df) {
     vals <- suppressWarnings(as.numeric(df[[effort_col]]))
-    data.frame(
-      n_overlap_records = sum(!is.na(vals)),
-      diel_overlap = sum(vals, na.rm = TRUE),
-      mean_diel_overlap = mean(vals, na.rm = TRUE)
+    valid_vals <- vals[!is.na(vals)]
+
+    keys <- df[1, c(track_id_col, track_diel_col), drop = FALSE]
+    names(keys)[2] <- "diel_period"
+
+    metrics <- data.frame(
+      n_overlap_records = length(valid_vals),
+      diel_overlap = sum(valid_vals),
+      mean_diel_overlap = if (length(valid_vals) == 0) NA_real_ else mean(valid_vals)
     )
+
+    cbind(keys, metrics)
   })
 
-  out <- do.call(rbind, out)
-  keys <- unique(dat[c(track_id_col, track_diel_col)])
-  rownames(out) <- NULL
-  names(keys)[2] <- "diel_period"
+  result <- do.call(rbind, out)
+  rownames(result) <- NULL
+  result
+}
 
-  cbind(keys, out)
+#' Summarize overlap by fishing gear type
+#'
+#' Produces gear-level summaries of fisheries overlap metrics.
+#'
+#' @param overlap_data A data frame of overlap metrics, usually produced by
+#'   calc_fisheries_overlap().
+#' @param gear_col Character string. Name of the gear column.
+#' @param overlap_col Character string. Name of the overlap metric column.
+#'
+#' @return A data frame with one row per fishing gear type and summary metrics.
+#' @export
+summarize_overlap_by_gear <- function(overlap_data,
+                                      gear_col = "gear",
+                                      overlap_col = "total_overlap") {
+  if (!is.data.frame(overlap_data)) {
+    stop("overlap_data must be a data frame.")
+  }
+
+  if (!gear_col %in% names(overlap_data)) {
+    stop("gear_col not found in overlap_data.")
+  }
+
+  if (!overlap_col %in% names(overlap_data)) {
+    stop("overlap_col not found in overlap_data.")
+  }
+
+  if (nrow(overlap_data) == 0) {
+    result <- data.frame(
+      gear = character(),
+      n_overlap_groups = integer(),
+      total_overlap = numeric(),
+      mean_overlap = numeric(),
+      max_overlap = numeric(),
+      stringsAsFactors = FALSE
+    )
+
+    names(result)[1] <- gear_col
+    return(result)
+  }
+
+  split_data <- split(overlap_data, overlap_data[[gear_col]], drop = TRUE)
+
+  out <- lapply(split_data, function(df) {
+    vals <- suppressWarnings(as.numeric(df[[overlap_col]]))
+    valid_vals <- vals[!is.na(vals)]
+
+    gear_key <- df[1, gear_col, drop = FALSE]
+
+    metrics <- data.frame(
+      n_overlap_groups = length(valid_vals),
+      total_overlap = sum(valid_vals),
+      mean_overlap = if (length(valid_vals) == 0) NA_real_ else mean(valid_vals),
+      max_overlap = if (length(valid_vals) == 0) NA_real_ else max(valid_vals)
+    )
+
+    cbind(gear_key, metrics)
+  })
+
+  result <- do.call(rbind, out)
+  rownames(result) <- NULL
+  result
 }
